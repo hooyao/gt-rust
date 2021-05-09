@@ -1,0 +1,12 @@
+version: "3"
+
+services:
+  rust-dev-clion:
+    image: huyao/rust-dev-clion:1.52.0_may-2021
+    build:
+      context: .
+      dockerfile: dockerfile
+    volumes: 
+      - /dev/shm:/dev/shm
+    ports: 
+      - 6080:80

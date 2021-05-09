@@ -1,0 +1,123 @@
+FROM dorowu/ubuntu-desktop-lxde-vnc:focal
+
+ARG IDEA_URL="https://download-cf.jetbrains.com/cpp/CLion-2021.1.1.tar.gz"
+ARG RUST_PLUGIN_URL="https://plugins.jetbrains.com/files/8182/118200/intellij-rust-0.3.146.3826-211.zip"
+ARG TOML_PLUGIN_URL="https://plugins.jetbrains.com/files/8195/118194/intellij-toml-0.2.146.3826-211.zip"
+
+RUN echo \
+"deb http://mirrors.aliyun.com/ubuntu/ focal main restricted universe multiverse\n\
+deb-src http://mirrors.aliyun.com/ubuntu/ focal main restricted universe multiverse\n\
+deb http://mirrors.aliyun.com/ubuntu/ focal-security main restricted universe multiverse\n\
+deb-src http://mirrors.aliyun.com/ubuntu/ focal-security main restricted universe multiverse\n\
+deb http://mirrors.aliyun.com/ubuntu/ focal-updates main restricted universe multiverse\n\
+deb-src http://mirrors.aliyun.com/ubuntu/ focal-updates main restricted universe multiverse\n\
+deb http://mirrors.aliyun.com/ubuntu/ focal-proposed main restricted universe multiverse\n\
+deb-src http://mirrors.aliyun.com/ubuntu/ focal-proposed main restricted universe multiverse\n\
+deb http://mirrors.aliyun.com/ubuntu/ focal-backports main restricted universe multiverse\n\
+deb-src http://mirrors.aliyun.com/ubuntu/ focal-backports main restricted universe multiverse" \
+    > /etc/apt/sources.list
+
+# # utils
+RUN apt-get update \
+    && apt-get install -qq -y --fix-missing --no-install-recommends \
+    curl \
+    dsh \
+    file \
+    git \
+    git-flow \
+    htop \
+    iputils-ping \
+    less \
+    net-tools \
+    ssh \
+    sudo \
+    unzip \
+    vim \
+    bzip2 \
+    tree \
+    build-essential \
+    openjdk-11-jdk \
+    openjdk-11-source \
+    maven \
+    && apt-get autoremove -y \
+    && apt-get autoclean -y \
+    && apt-get clean -y \
+    && rm -rf /usr/share/locale/* \
+    && rm -rf /var/cache/debconf/* \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/*
+
+# lib for idea
+RUN apt-get update && apt-get install -qq -y --fix-missing --no-install-recommends \
+    software-properties-common \
+    libxext-dev \
+    libxrender-dev \
+    libxtst-dev \
+    libfreetype6-dev \
+    libfontconfig1 \
+    libxslt1.1 \
+    libgtk2.0-0 \
+    libcanberra-gtk-module \
+    && apt-get autoremove -y \
+    && apt-get autoclean -y \
+    && apt-get clean -y \
+    && rm -rf /usr/share/locale/* \
+    && rm -rf /var/cache/debconf/* \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/*
+
+# install clion
+RUN curl -fSL ${IDEA_URL} -o /tmp/idea.tar.gz \
+    && cd /opt/ && tar zxf /tmp/idea.tar.gz -C /opt && mv /opt/clion-* /opt/idea && rm /tmp/idea.tar.gz \
+    && ln -s /opt/idea/bin/clion.sh /usr/bin/clion \
+    && chmod 777 -R /opt/idea
+
+RUN curl -fSL ${RUST_PLUGIN_URL} -o /tmp/rust.zip \
+    && curl -fSL ${TOML_PLUGIN_URL} -o /tmp/tmol.zip \
+    && mkdir -p /root/.local/share/JetBrains/CLion2021.1 \
+    && unzip /tmp/rust.zip -d /root/.local/share/JetBrains/CLion2021.1 \
+    && unzip /tmp/tmol.zip -d /root/.local/share/JetBrains/CLion2021.1 \
+    && rm /tmp/rust.zip \
+    && rm /tmp/tmol.zip
+
+ADD CLion211.evaluation.key /root/.config/JetBrains/CLion2021.1/eval/CLion211.evaluation.key
+# install rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH \
+    RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static \
+    RUSTUP_UPDATE_ROOT=https://mirrors.ustc.edu.cn/rust-static/rustup \
+    RUST_VERSION=1.52.0
+
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture)"; \
+    case "${dpkgArch##*-}" in \
+        amd64) rustArch='x86_64-unknown-linux-gnu'; rustupSha256='fb3a7425e3f10d51f0480ac3cdb3e725977955b2ba21c9bdac35309563b115e8' ;; \
+        armhf) rustArch='armv7-unknown-linux-gnueabihf'; rustupSha256='f263e170da938888601a8e0bc822f8b40664ab067b390cf6c4fdb1d7c2d844e7' ;; \
+        arm64) rustArch='aarch64-unknown-linux-gnu'; rustupSha256='de1dddd8213644cba48803118c7c16387838b4d53b901059e01729387679dd2a' ;; \
+        i386) rustArch='i686-unknown-linux-gnu'; rustupSha256='66c03055119cecdfc20828c95429212ae5051372513f148342758bb5d0130997' ;; \
+        *) echo >&2 "unsupported architecture: ${dpkgArch}"; exit 1 ;; \
+    esac; \
+    url="https://static.rust-lang.org/rustup/archive/1.24.1/${rustArch}/rustup-init"; \
+    wget "$url"; \
+    echo "${rustupSha256} *rustup-init" | sha256sum -c -; \
+    chmod +x rustup-init; \
+    ./rustup-init -y --no-modify-path --profile minimal --default-toolchain $RUST_VERSION --default-host ${rustArch}; \
+    rm rustup-init; \
+    chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
+    rustup --version; \
+    cargo --version; \
+    rustc --version;
+
+RUN mkdir -p /root/Desktop \
+    && echo \
+"#!/usr/bin/env xdg-open\n\
+[Desktop Entry]\n\
+Version=1.0\n\
+Type=Application\n\
+Terminal=false\n\
+Exec=/usr/bin/clion\n\
+Name=CLion\n\
+Comment=CLion\n\
+Icon=/opt/idea/bin/clion.png" \
+    > /root/Desktop/CLion.Desktop
